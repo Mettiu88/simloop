@@ -47,7 +47,7 @@
   "bugs": {
     "url": "https://github.com/Mettiu88/simloop/issues"
   },
-  "author": "Matteo Virgilio",
+  "author": "Matteo Virgilio <mettiu_sicilia@hotmail.it> (https://www.matteovirgilio.it/)",
   "engines": {
     "node": ">=18"
   },
