@@ -344,7 +344,55 @@ Handlers can call `ctx.schedule()` to insert new events during processing. Const
 
 ---
 
-## 9. Out of Scope (v1)
+## 9. Probability Distributions
+
+Simloop ships a set of common probability distributions as composable factory functions. Each factory takes a `rng: () => number` source (typically `ctx.random` or `SeededRandom.next`) and the distribution parameters, and returns a `() => number` sampler.
+
+This design keeps distributions decoupled from the engine — they can be used standalone with any `[0, 1)` source (including `Math.random`).
+
+### 9.1 Available Distributions
+
+| Distribution | Factory signature | Description |
+|---|---|---|
+| **Uniform** | `uniform(rng, a, b)` | Continuous uniform on `[a, b)` |
+| **Gaussian** | `gaussian(rng, mean?, stddev?)` | Normal distribution via Box-Muller transform. Defaults to standard normal (μ=0, σ=1) |
+| **Exponential** | `exponential(rng, rate)` | Exponential with rate λ. Mean = 1/λ |
+| **Poisson** | `poisson(rng, lambda)` | Poisson via Knuth's algorithm. Returns non-negative integers |
+| **Bernoulli** | `bernoulli(rng, p)` | Returns 1 with probability p, 0 otherwise |
+| **Zipf** | `zipf(rng, n, s)` | Zipf over ranks `[1, n]` with exponent s. Rank k has probability ∝ 1/k^s |
+
+### 9.2 Usage
+
+```typescript
+import { SeededRandom } from 'simloop';
+import { exponential, gaussian } from 'simloop/distributions';
+
+const prng = new SeededRandom(42);
+const rng = () => prng.next();
+
+const interArrival = exponential(rng, 0.5);   // mean = 2
+const serviceTime  = gaussian(rng, 10, 2);    // mean = 10, stddev = 2
+
+console.log(interArrival()); // sample from exponential
+console.log(serviceTime());  // sample from gaussian
+```
+
+Distributions can also be used inside event handlers via `ctx.random`:
+
+```typescript
+sim.on('customer:arrive', (event, ctx) => {
+  const nextArrival = exponential(() => ctx.random(), 0.5);
+  ctx.schedule('customer:arrive', ctx.clock + nextArrival(), { ... });
+});
+```
+
+### 9.3 Validation
+
+All factories validate their parameters and throw `RangeError` for invalid inputs (e.g., negative rate, `p` outside `[0, 1]`).
+
+---
+
+## 10. Out of Scope (v1)
 
 - **GUI / Visualization**: No built-in charts or dashboards. Users consume `SimulationResult` in external tools.
 - **Distributed / parallel execution**: Single-threaded, single-process.
@@ -355,7 +403,7 @@ Handlers can call `ctx.schedule()` to insert new events during processing. Const
 
 ---
 
-## 10. Example: M/M/1 Queue
+## 11. Example: M/M/1 Queue
 
 A minimal single-server queue simulation demonstrating the full API:
 

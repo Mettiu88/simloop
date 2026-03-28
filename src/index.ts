@@ -3,6 +3,7 @@ export { SimulationError } from './engine.js';
 export { ConsoleLogger } from './logger.js';
 export { DefaultStatsCollector } from './stats.js';
 export { SeededRandom } from './prng.js';
+export { uniform, gaussian, exponential, poisson, bernoulli, zipf } from './distributions/index.js';
 
 export type {
   SimEvent,

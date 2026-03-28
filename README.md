@@ -16,6 +16,7 @@ Simloop provides a minimal, type-safe API for building simulations of real-world
 - **Zero runtime dependencies** — only Node.js built-ins
 - **Deterministic** — seeded PRNG ensures reproducible results
 - **Simple API** — define handlers with `sim.on()`, schedule events with `ctx.schedule()`
+- **Probability distributions** — uniform, gaussian, exponential, poisson, bernoulli, zipf
 - **Lifecycle management** — run, pause, resume, stop, reset
 - **Built-in statistics** — online mean, variance, min, max, count
 - **Pluggable logging** — bring your own logger or use the default console logger
@@ -169,10 +170,38 @@ const result = await sim.runAsync();
 See the [examples/](examples/) directory:
 
 - **[coffee-shop](examples/coffee-shop/)** — multi-barista coffee shop with customer patience, drink types, and queue management
+- **[network-packets](examples/network-packets/)** — network router simulation using all six probability distributions
 
 ```bash
 npm run example:coffee-shop
+npm run example:network-packets
 ```
+
+## Probability Distributions
+
+Simloop includes common probability distributions as composable factory functions. Each takes a `() => number` source (like `ctx.random`) and returns a sampler:
+
+```typescript
+import { SimulationEngine, exponential, gaussian, bernoulli } from 'simloop';
+
+const sim = new SimulationEngine<Events>({ seed: 42 });
+
+sim.on('customer:arrive', (event, ctx) => {
+  const nextArrival = exponential(() => ctx.random(), 0.5);
+  const serviceTime = gaussian(() => ctx.random(), 10, 2);
+
+  ctx.schedule('customer:arrive', ctx.clock + nextArrival(), { ... });
+});
+```
+
+| Distribution | Factory | Description |
+|---|---|---|
+| Uniform | `uniform(rng, a, b)` | Continuous on `[a, b)` |
+| Gaussian | `gaussian(rng, mean?, stddev?)` | Normal via Box-Muller (default: standard normal) |
+| Exponential | `exponential(rng, rate)` | Rate λ, mean = 1/λ |
+| Poisson | `poisson(rng, lambda)` | Non-negative integers, mean = λ |
+| Bernoulli | `bernoulli(rng, p)` | Returns 1 with probability p, 0 otherwise |
+| Zipf | `zipf(rng, n, s)` | Ranks `[1, n]`, probability ∝ 1/k^s |
 
 ## API Reference
 
@@ -183,6 +212,15 @@ npm run example:coffee-shop
 - `ConsoleLogger` — default logger implementation
 - `DefaultStatsCollector` — default statistics collector
 - `SeededRandom` — Mulberry32 PRNG
+
+### Exported Distribution Functions
+
+- `uniform(rng, a, b)` — continuous uniform
+- `gaussian(rng, mean?, stddev?)` — normal (Box-Muller)
+- `exponential(rng, rate)` — exponential
+- `poisson(rng, lambda)` — Poisson (Knuth)
+- `bernoulli(rng, p)` — Bernoulli
+- `zipf(rng, n, s)` — Zipf
 
 ### Exported Types
 
