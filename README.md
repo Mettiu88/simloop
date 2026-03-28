@@ -1,5 +1,11 @@
 # Simloop
 
+[![npm version](https://img.shields.io/npm/v/simloop)](https://www.npmjs.com/package/simloop)
+[![license](https://img.shields.io/npm/l/simloop)](./LICENSE)
+[![build](https://img.shields.io/github/actions/workflow/status/Mettiu88/simloop/ci.yml?branch=master)](https://github.com/Mettiu88/simloop/actions)
+[![npm bundle size](https://img.shields.io/bundlephobia/minzip/simloop)](https://bundlephobia.com/package/simloop)
+[![types](https://img.shields.io/npm/types/simloop)](https://www.npmjs.com/package/simloop)
+
 A general-purpose discrete event simulation (DES) framework for Node.js, written in TypeScript.
 
 Simloop provides a minimal, type-safe API for building simulations of real-world systems. You define events, entities, and handlers — the framework runs the event loop.
