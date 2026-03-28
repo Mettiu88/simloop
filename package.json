@@ -41,7 +41,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Mettiu88/simloop.git"
+    "url": "git+https://github.com/Mettiu88/simloop.git"
   },
   "homepage": "https://github.com/Mettiu88/simloop#readme",
   "bugs": {
