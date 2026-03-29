@@ -31,7 +31,7 @@ npm install simloop
 ## Quick Start
 
 ```typescript
-import { SimulationEngine } from 'simloop';
+import { SimulationEngine, exponential } from 'simloop';
 
 // 1. Define your event types
 type Events = {
@@ -51,9 +51,9 @@ sim.on('customer:arrive', (event, ctx) => {
     customerId: event.payload.customerId,
   });
 
-  // schedule next arrival
-  const interval = -Math.log(1 - ctx.random()) * 5;
-  ctx.schedule('customer:arrive', ctx.clock + interval, {
+  // schedule next arrival (exponential inter-arrival, mean = 5)
+  const nextArrival = exponential(() => ctx.random(), 0.2);
+  ctx.schedule('customer:arrive', ctx.clock + nextArrival(), {
     customerId: `C${ctx.stats.get('arrivals').count + 1}`,
   });
 });
