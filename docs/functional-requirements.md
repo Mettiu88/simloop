@@ -30,8 +30,9 @@
 | **Event**            | A timestamped action to be executed. Carries a `time`, a `type` (string tag), and a generic `payload`. |
 | **Event Queue**      | A min-heap priority queue ordered by `(time, insertionOrder)`. The insertion-order tiebreaker guarantees deterministic behavior for simultaneous events. |
 | **Entity**           | A stateful object participating in the simulation. Has a unique `id` and user-defined state. |
-| **Simulation Context** | The object passed to event handlers. Provides access to the clock, entity registry, event-scheduling API, statistics, and logger. |
-| **Simulation Engine** | The orchestrator. Owns the clock, queue, entity registry, and lifecycle. Runs the main event loop. |
+| **Store**            | A single typed object (`TStore`) that lives for the duration of the simulation run. Accessible as `ctx.store` in all handlers and hooks. Returned in `SimulationResult`. Reset to its initial value on `reset()`. |
+| **Simulation Context** | The object passed to event handlers. Provides access to the clock, entity registry, event-scheduling API, statistics, logger, and store. |
+| **Simulation Engine** | The orchestrator. Owns the clock, queue, entity registry, store, and lifecycle. Runs the main event loop. |
 
 ---
 
@@ -61,12 +62,12 @@ interface SimEntity<TState = unknown> {
 
 Minimal by design. Users define their own state shape via the generic parameter.
 
-### 3.3 `SimContext<TEventMap>`
+### 3.3 `SimContext<TEventMap, TStore>`
 
-The context object passed to every event handler. `TEventMap` is a record mapping event type strings to their payload types.
+The context object passed to every event handler. `TEventMap` is a record mapping event type strings to their payload types. `TStore` is the shape of the global simulation store (defaults to `Record<string, unknown>`).
 
 ```typescript
-interface SimContext<TEventMap extends Record<string, unknown>> {
+interface SimContext<TEventMap extends Record<string, unknown>, TStore = Record<string, unknown>> {
   /** Current simulation time */
   readonly clock: number;
 
@@ -86,8 +87,11 @@ interface SimContext<TEventMap extends Record<string, unknown>> {
   removeEntity(id: string): void;
   getAllEntities(): ReadonlyArray<SimEntity>;
 
-  /** Statistics collector */
+  /** Statistics collector (numeric metrics only) */
   stats: StatsCollector;
+
+  /** Global simulation store — typed, mutable, persists for the full run */
+  store: TStore;
 
   /** Logging */
   log(level: LogLevel, message: string, data?: unknown): void;
@@ -97,39 +101,40 @@ interface SimContext<TEventMap extends Record<string, unknown>> {
 }
 ```
 
-### 3.4 `EventHandler<TEventMap, TType>`
+### 3.4 `EventHandler<TEventMap, TType, TStore>`
 
 ```typescript
 type EventHandler<
   TEventMap extends Record<string, unknown>,
-  TType extends keyof TEventMap & string
-> = (event: SimEvent<TType, TEventMap[TType]>, ctx: SimContext<TEventMap>) => void;
+  TType extends keyof TEventMap & string,
+  TStore = Record<string, unknown>
+> = (event: SimEvent<TType, TEventMap[TType]>, ctx: SimContext<TEventMap, TStore>) => void;
 ```
 
 Handlers are pure functions. Side effects happen only through `ctx`. This makes handlers independently testable.
 
-### 3.5 `SimulationEngine<TEventMap>`
+### 3.5 `SimulationEngine<TEventMap, TStore>`
 
 The main class that users instantiate and configure.
 
 ```typescript
-class SimulationEngine<TEventMap extends Record<string, unknown>> {
-  constructor(options?: SimulationEngineOptions);
+class SimulationEngine<TEventMap extends Record<string, unknown>, TStore = Record<string, unknown>> {
+  constructor(options?: SimulationEngineOptions<TStore>);
 
   /** Register a handler for an event type */
   on<K extends keyof TEventMap & string>(
     type: K,
-    handler: EventHandler<TEventMap, K>
+    handler: EventHandler<TEventMap, K, TStore>
   ): this;
 
   /** Set up initial entities and events */
-  init(setup: (ctx: SimContext<TEventMap>) => void): this;
+  init(setup: (ctx: SimContext<TEventMap, TStore>) => void): this;
 
   /** Run the simulation (synchronous) */
-  run(): SimulationResult;
+  run(): SimulationResult<TStore>;
 
   /** Run the simulation (async — yields to Node.js event loop periodically) */
-  runAsync(): Promise<SimulationResult>;
+  runAsync(): Promise<SimulationResult<TStore>>;
 
   /** Pause the simulation (can be resumed) */
   pause(): void;
@@ -140,13 +145,13 @@ class SimulationEngine<TEventMap extends Record<string, unknown>> {
   /** Stop the simulation (terminal — cannot be resumed) */
   stop(): void;
 
-  /** Reset to idle state: clears clock, queue, entities, stats. Handlers and hooks are preserved. */
+  /** Reset to idle state: clears clock, queue, entities, stats, store. Handlers and hooks are preserved. */
   reset(): void;
 
   /** Lifecycle hooks */
-  beforeEach(hook: (event: SimEvent, ctx: SimContext<TEventMap>) => void): this;
-  afterEach(hook: (event: SimEvent, ctx: SimContext<TEventMap>) => void): this;
-  onEnd(hook: (ctx: SimContext<TEventMap>) => void): this;
+  beforeEach(hook: (event: SimEvent, ctx: SimContext<TEventMap, TStore>) => void): this;
+  afterEach(hook: (event: SimEvent, ctx: SimContext<TEventMap, TStore>) => void): this;
+  onEnd(hook: (ctx: SimContext<TEventMap, TStore>) => void): this;
 
   /** Read-only state */
   readonly clock: number;
@@ -200,23 +205,24 @@ interface SimLogger {
 
 Default implementation writes to `console` with format: `[SIM t=123.45] [INFO] message`.
 
-### 3.8 `SimulationResult`
+### 3.8 `SimulationResult<TStore>`
 
 ```typescript
-interface SimulationResult {
+interface SimulationResult<TStore = Record<string, unknown>> {
   readonly totalEventsProcessed: number;
   readonly totalEventsCancelled: number;
   readonly finalClock: number;
   readonly wallClockMs: number;
   readonly stats: Record<string, StatsSummary>;
   readonly status: 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached';
+  readonly store: TStore;
 }
 ```
 
 ### 3.9 Configuration
 
 ```typescript
-interface SimulationEngineOptions {
+interface SimulationEngineOptions<TStore = Record<string, unknown>> {
   /** PRNG seed for reproducibility. Default: Date.now() */
   seed?: number;
 
@@ -237,6 +243,9 @@ interface SimulationEngineOptions {
 
   /** Delay in ms between events in runAsync (for visualization/debugging). Default: 0 */
   realTimeDelay?: number;
+
+  /** Initial value for the global simulation store. Deep-cloned on init and on reset(). Default: {} */
+  store?: TStore;
 }
 ```
 
@@ -318,7 +327,8 @@ Handlers can call `ctx.schedule()` to insert new events during processing. Const
 ## 6. State Management
 
 - **Entity Registry**: Internal `Map<string, SimEntity>`. Entities are added/removed via `SimContext` methods.
-- **No imposed structure**: The framework does not enforce any schema on entity state — that is the user's domain.
+- **Global Store**: A single `TStore` object initialized from `options.store`, accessible as `ctx.store` in all handlers and hooks, and returned in `SimulationResult.store`. The initial value is deep-cloned via `structuredClone`, so `reset()` always restores the exact original state. Mutations happen in-place — no proxy or Immer wrapper.
+- **No imposed structure**: The framework does not enforce any schema on entity state or store shape — that is the user's domain.
 - **Immutability recommendation**: Users should treat `event.payload` as readonly. TypeScript's `Readonly<T>` can be used in the `TEventMap` generic for enforcement.
 
 ---

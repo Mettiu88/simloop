@@ -22,22 +22,24 @@ export class SimulationError extends Error {
   }
 }
 
-type HookFn<TEventMap extends Record<string, unknown>> = (
+type HookFn<TEventMap extends Record<string, unknown>, TStore> = (
   event: SimEvent,
-  ctx: SimContext<TEventMap>,
+  ctx: SimContext<TEventMap, TStore>,
 ) => void;
 
-type EndHookFn<TEventMap extends Record<string, unknown>> = (
-  ctx: SimContext<TEventMap>,
+type EndHookFn<TEventMap extends Record<string, unknown>, TStore> = (
+  ctx: SimContext<TEventMap, TStore>,
 ) => void;
 
 /**
  * Discrete event simulation engine.
  *
- * Generic parameter `TEventMap` maps event type strings to their payload types,
- * providing full type safety for event scheduling and handling.
+ * `TEventMap` maps event type strings to their payload types, providing full
+ * type safety for event scheduling and handling.
+ * `TStore` is the shape of the global simulation store, accessible as `ctx.store`
+ * in all handlers and hooks, and returned in `SimulationResult`.
  */
-export class SimulationEngine<TEventMap extends Record<string, unknown>> {
+export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore = Record<string, unknown>> {
   private _clock = 0;
   private _status: SimulationStatus = 'idle';
   private _eventsProcessed = 0;
@@ -45,10 +47,10 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
 
   private readonly queue = new PriorityQueue();
   private readonly entities = new Map<string, SimEntity>();
-  private readonly handlers = new Map<string, EventHandler<TEventMap, string>>();
-  private readonly beforeEachHooks: HookFn<TEventMap>[] = [];
-  private readonly afterEachHooks: HookFn<TEventMap>[] = [];
-  private readonly onEndHooks: EndHookFn<TEventMap>[] = [];
+  private readonly handlers = new Map<string, EventHandler<TEventMap, string, TStore>>();
+  private readonly beforeEachHooks: HookFn<TEventMap, TStore>[] = [];
+  private readonly afterEachHooks: HookFn<TEventMap, TStore>[] = [];
+  private readonly onEndHooks: EndHookFn<TEventMap, TStore>[] = [];
 
   private readonly rng: SeededRandom;
   private readonly _stats: DefaultStatsCollector;
@@ -59,10 +61,13 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
   private readonly maxEvents: number;
   private readonly realTimeDelay: number;
 
-  private eventIdCounter = 0;
-  private context!: SimContext<TEventMap>;
+  private _store: TStore;
+  private readonly _initialStore: TStore;
 
-  constructor(private readonly options: SimulationEngineOptions = {}) {
+  private eventIdCounter = 0;
+  private context!: SimContext<TEventMap, TStore>;
+
+  constructor(private readonly options: SimulationEngineOptions<TStore> = {}) {
     this.seed = options.seed ?? Date.now();
     this.maxTime = options.maxTime ?? Infinity;
     this.maxEvents = options.maxEvents ?? Infinity;
@@ -74,6 +79,9 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
       options.name ?? 'Simulation',
       options.logLevel ?? 'info',
     );
+
+    this._initialStore = structuredClone(options.store ?? ({} as TStore));
+    this._store = structuredClone(this._initialStore);
 
     this.buildContext();
   }
@@ -100,32 +108,32 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
 
   on<K extends keyof TEventMap & string>(
     type: K,
-    handler: EventHandler<TEventMap, K>,
+    handler: EventHandler<TEventMap, K, TStore>,
   ): this {
-    this.handlers.set(type, handler as EventHandler<TEventMap, string>);
+    this.handlers.set(type, handler as EventHandler<TEventMap, string, TStore>);
     return this;
   }
 
   // --- Lifecycle hooks ---
 
-  beforeEach(hook: HookFn<TEventMap>): this {
+  beforeEach(hook: HookFn<TEventMap, TStore>): this {
     this.beforeEachHooks.push(hook);
     return this;
   }
 
-  afterEach(hook: HookFn<TEventMap>): this {
+  afterEach(hook: HookFn<TEventMap, TStore>): this {
     this.afterEachHooks.push(hook);
     return this;
   }
 
-  onEnd(hook: EndHookFn<TEventMap>): this {
+  onEnd(hook: EndHookFn<TEventMap, TStore>): this {
     this.onEndHooks.push(hook);
     return this;
   }
 
   // --- Lifecycle ---
 
-  init(setup: (ctx: SimContext<TEventMap>) => void): this {
+  init(setup: (ctx: SimContext<TEventMap, TStore>) => void): this {
     if (this._status !== 'idle') {
       throw new SimulationError(`Cannot init in '${this._status}' state. Call reset() first.`);
     }
@@ -134,7 +142,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
     return this;
   }
 
-  run(): SimulationResult {
+  run(): SimulationResult<TStore> {
     this.assertCanRun();
     this._status = 'running';
     this.logInternal('info', 'Simulation started');
@@ -147,7 +155,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
     return this.buildResult(wallClockMs);
   }
 
-  async runAsync(): Promise<SimulationResult> {
+  async runAsync(): Promise<SimulationResult<TStore>> {
     this.assertCanRun();
     this._status = 'running';
     this.logInternal('info', 'Simulation started (async)');
@@ -196,6 +204,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
     this.entities.clear();
     this._stats.reset();
     this.rng.reset(this.seed);
+    this._store = structuredClone(this._initialStore);
     this._status = 'idle';
     this.buildContext();
     this.logInternal('debug', 'Simulation reset');
@@ -313,8 +322,8 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
     this.logInternal('info', `Simulation finished. Events processed: ${this._eventsProcessed}`);
   }
 
-  private buildResult(wallClockMs: number): SimulationResult {
-    let endStatus: SimulationResult['status'];
+  private buildResult(wallClockMs: number): SimulationResult<TStore> {
+    let endStatus: SimulationResult<TStore>['status'];
 
     if (this._status === 'stopped') {
       endStatus = 'stopped';
@@ -333,6 +342,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
       wallClockMs,
       stats: this._stats.getAll(),
       status: endStatus,
+      store: this._store,
     };
   }
 
@@ -391,6 +401,10 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>> {
       },
 
       stats: engine._stats,
+
+      get store(): TStore {
+        return engine._store;
+      },
 
       log(level: LogLevel, message: string, data?: unknown): void {
         const loggerImpl = engine.options.logger ?? engine.logger;

@@ -107,9 +107,31 @@ Every handler receives a `SimContext` with:
 | `ctx.getEntity(id)` | Get an entity by ID |
 | `ctx.addEntity(entity)` | Add an entity |
 | `ctx.removeEntity(id)` | Remove an entity |
-| `ctx.stats` | Statistics collector |
+| `ctx.store` | Global simulation store (typed as `TStore`) |
+| `ctx.stats` | Statistics collector (numeric metrics) |
 | `ctx.random()` | Seeded random number (0-1) |
 | `ctx.log(level, message)` | Log a message |
+
+### Global Store
+
+The store is a typed, persistent object for accumulating custom data across handlers and hooks. Initialize it via `options.store` and access it as `ctx.store`. It's returned in `SimulationResult` and restored to its initial value on `reset()`.
+
+```typescript
+type Events = { tick: { value: number } };
+type Store  = { count: number; total: number };
+
+const sim = new SimulationEngine<Events, Store>({
+  store: { count: 0, total: 0 },
+});
+
+sim.on('tick', (event, ctx) => {
+  ctx.store.count++;
+  ctx.store.total += event.payload.value;
+});
+
+const result = sim.run();
+console.log(result.store); // { count: ..., total: ... }
+```
 
 ### Event Cancellation
 
@@ -132,13 +154,14 @@ sim.onEnd((ctx) => { /* when simulation finishes */ });
 ## Configuration
 
 ```typescript
-const sim = new SimulationEngine<Events>({
-  seed: 42,           // PRNG seed (default: Date.now())
-  maxTime: 1000,      // stop at this simulation time (default: Infinity)
-  maxEvents: 5000,    // stop after N events (default: Infinity)
-  logLevel: 'info',   // 'debug' | 'info' | 'warn' | 'error' | 'silent'
-  name: 'MySim',      // log prefix (default: 'Simulation')
+const sim = new SimulationEngine<Events, Store>({
+  seed: 42,            // PRNG seed (default: Date.now())
+  maxTime: 1000,       // stop at this simulation time (default: Infinity)
+  maxEvents: 5000,     // stop after N events (default: Infinity)
+  logLevel: 'info',    // 'debug' | 'info' | 'warn' | 'error' | 'silent'
+  name: 'MySim',       // log prefix (default: 'Simulation')
   realTimeDelay: 100,  // ms delay between events in runAsync (default: 0)
+  store: { ... },      // initial global store value (default: {})
 });
 ```
 
@@ -155,6 +178,7 @@ result.finalClock            // final simulation time
 result.wallClockMs           // real-world execution time in ms
 result.stats                 // Record<string, StatsSummary>
 result.status                // 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached'
+result.store                 // TStore — final state of the global store
 ```
 
 ## Async Execution
@@ -169,10 +193,12 @@ const result = await sim.runAsync();
 
 See the [examples/](examples/) directory:
 
+- **[store-counter](examples/store-counter/)** — minimal example showing `ctx.store` usage
 - **[coffee-shop](examples/coffee-shop/)** — multi-barista coffee shop with customer patience, drink types, and queue management
 - **[network-packets](examples/network-packets/)** — network router simulation using all six probability distributions
 
 ```bash
+npm run example:store-counter
 npm run example:coffee-shop
 npm run example:network-packets
 ```
@@ -207,7 +233,7 @@ sim.on('customer:arrive', (event, ctx) => {
 
 ### Exported Classes
 
-- `SimulationEngine<TEventMap>` — main simulation engine
+- `SimulationEngine<TEventMap, TStore>` — main simulation engine
 - `SimulationError` — error thrown for invalid operations
 - `ConsoleLogger` — default logger implementation
 - `DefaultStatsCollector` — default statistics collector
@@ -226,10 +252,10 @@ sim.on('customer:arrive', (event, ctx) => {
 
 - `SimEvent<TType, TPayload>` — simulation event
 - `SimEntity<TState>` — simulation entity
-- `SimContext<TEventMap>` — handler context
-- `EventHandler<TEventMap, TType>` — handler function signature
-- `SimulationResult` — run result
-- `SimulationEngineOptions` — engine configuration
+- `SimContext<TEventMap, TStore>` — handler context
+- `EventHandler<TEventMap, TType, TStore>` — handler function signature
+- `SimulationResult<TStore>` — run result
+- `SimulationEngineOptions<TStore>` — engine configuration
 - `StatsCollector` / `StatsSummary` — statistics interfaces
 - `SimLogger` / `LogLevel` — logging interfaces
 - `SimulationStatus` / `SimulationEndStatus` — lifecycle types

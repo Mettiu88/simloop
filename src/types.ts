@@ -42,7 +42,7 @@ export interface StatsCollector {
 }
 
 /** Simulation context passed to event handlers */
-export interface SimContext<TEventMap extends Record<string, unknown>> {
+export interface SimContext<TEventMap extends Record<string, unknown>, TStore = Record<string, unknown>> {
   readonly clock: number;
 
   schedule<K extends keyof TEventMap & string>(
@@ -61,13 +61,16 @@ export interface SimContext<TEventMap extends Record<string, unknown>> {
   stats: StatsCollector;
   log(level: LogLevel, message: string, data?: unknown): void;
   random(): number;
+
+  store: TStore;
 }
 
 /** Event handler function signature */
 export type EventHandler<
   TEventMap extends Record<string, unknown>,
   TType extends keyof TEventMap & string,
-> = (event: SimEvent<TType, TEventMap[TType]>, ctx: SimContext<TEventMap>) => void;
+  TStore = Record<string, unknown>,
+> = (event: SimEvent<TType, TEventMap[TType]>, ctx: SimContext<TEventMap, TStore>) => void;
 
 /** Simulation lifecycle status */
 export type SimulationStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'finished';
@@ -76,17 +79,18 @@ export type SimulationStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'fini
 export type SimulationEndStatus = 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached';
 
 /** Result returned after a simulation run */
-export interface SimulationResult {
+export interface SimulationResult<TStore = Record<string, unknown>> {
   readonly totalEventsProcessed: number;
   readonly totalEventsCancelled: number;
   readonly finalClock: number;
   readonly wallClockMs: number;
   readonly stats: Record<string, StatsSummary>;
   readonly status: SimulationEndStatus;
+  readonly store: TStore;
 }
 
 /** Engine configuration options */
-export interface SimulationEngineOptions {
+export interface SimulationEngineOptions<TStore = Record<string, unknown>> {
   seed?: number;
   maxTime?: number;
   maxEvents?: number;
@@ -94,4 +98,5 @@ export interface SimulationEngineOptions {
   logger?: SimLogger;
   name?: string;
   realTimeDelay?: number;
+  store?: TStore;
 }
