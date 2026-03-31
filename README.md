@@ -16,7 +16,7 @@ Simloop provides a minimal, type-safe API for building simulations of real-world
 - **Zero runtime dependencies** — only Node.js built-ins
 - **Deterministic** — seeded PRNG ensures reproducible results
 - **Simple API** — define handlers with `sim.on()`, schedule events with `ctx.schedule()`
-- **Probability distributions** — uniform, gaussian, exponential, poisson, bernoulli, zipf
+- **Probability distributions** — uniform, gaussian, exponential, poisson, bernoulli, zipf, triangular, weibull, lognormal, erlang, geometric
 - **Lifecycle management** — run, pause, resume, stop, reset
 - **Built-in statistics** — online mean, variance, min, max, count
 - **Pluggable logging** — bring your own logger or use the default console logger
@@ -266,6 +266,11 @@ sim.on('customer:arrive', (event, ctx) => {
 | Poisson | `poisson(rng, lambda)` | Non-negative integers, mean = λ |
 | Bernoulli | `bernoulli(rng, p)` | Returns 1 with probability p, 0 otherwise |
 | Zipf | `zipf(rng, n, s)` | Ranks `[1, n]`, probability ∝ 1/k^s |
+| Triangular | `triangular(rng, min, mode, max)` | Three-point estimate; useful when only min/mode/max are known |
+| Weibull | `weibull(rng, scale, shape)` | Reliability and failure analysis; shape controls failure rate regime |
+| Lognormal | `lognormal(rng, mu?, sigma?)` | Right-skewed; models service times, repair durations, response times |
+| Erlang | `erlang(rng, k, rate)` | Sum of k exponentials; models k-stage sequential processes |
+| Geometric | `geometric(rng, p)` | Trials until first success; minimum value is 1 |
 
 ## API Reference
 
@@ -286,6 +291,11 @@ sim.on('customer:arrive', (event, ctx) => {
 - `poisson(rng, lambda)` — Poisson (Knuth)
 - `bernoulli(rng, p)` — Bernoulli
 - `zipf(rng, n, s)` — Zipf
+- `triangular(rng, min, mode, max)` — triangular
+- `weibull(rng, scale, shape)` — Weibull
+- `lognormal(rng, mu?, sigma?)` — lognormal
+- `erlang(rng, k, rate)` — Erlang
+- `geometric(rng, p)` — geometric
 
 ### Exported Types
 

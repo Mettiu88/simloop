@@ -4,3 +4,8 @@ export { exponential } from './exponential.js';
 export { poisson } from './poisson.js';
 export { bernoulli } from './bernoulli.js';
 export { zipf } from './zipf.js';
+export { triangular } from './triangular.js';
+export { weibull } from './weibull.js';
+export { lognormal } from './lognormal.js';
+export { erlang } from './erlang.js';
+export { geometric } from './geometric.js';

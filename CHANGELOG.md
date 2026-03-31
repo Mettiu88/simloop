@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-03-31
+
+### Added
+
+- `triangular(rng, min, mode, max)` — triangular distribution; three-point estimate for when only min/mode/max are known (PERT, expert estimates)
+- `weibull(rng, scale, shape)` — Weibull distribution; reliability and failure analysis (shape < 1: early failures, shape = 1: exponential, shape > 1: wear-out)
+- `lognormal(rng, mu?, sigma?)` — lognormal distribution; right-skewed service times, repair durations, response times
+- `erlang(rng, k, rate)` — Erlang distribution; sum of k exponentials, models k-stage sequential processes; k=1 is equivalent to exponential
+- `geometric(rng, p)` — geometric distribution; number of trials until first success, minimum value is 1
+
 ## [0.1.4] - 2026-03-31
 
 ### Added
