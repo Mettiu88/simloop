@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-03-31
+
+### Added
+
+- `Resource` — seize/delay/release primitive for capacity-constrained shared resources (M/M/c queueing pattern)
+  - `request(ctx, cb, opts?)` — acquires a slot; callback fires immediately if free, queued otherwise
+  - `release(ctx)` — frees a slot and automatically grants the next queued request
+  - `cancel(handle)` — withdraws a pending request from the queue
+  - `snapshot()` — returns a plain state object (`name`, `capacity`, `inUse`, `queueLength`)
+  - `reset()` — clears internal state for re-run after `engine.reset()`
+  - Priority queuing via `RequestOptions.priority` (lower = higher precedence, FIFO within same priority)
+  - Auto-collected statistics: `resource.{name}.waitTime`, `queueLength`, `utilization`, `requests`, `grants`
+- `ResourceOptions`, `RequestOptions`, `RequestHandle`, `ResourceSnapshot` — exported types
+- `docs/resource-spec.md` — full API specification with queueing theory background, usage examples, and edge case documentation
+- `coffee-shop` example rewritten using `Resource` (345 → ~200 lines)
+
+### Changed
+
+- `docs/functional-requirements.md` renamed to `docs/simloop-general-specs.md`
+
+## [0.1.3] - 2026-03-29
+
+### Added
+
+- `ctx.store` — global typed store (`TStore`) accessible in all handlers and hooks; persisted in `SimulationResult` and deep-cloned on `reset()`
+- `store` option in `SimulationEngineOptions` to set the initial store value
+- `store-counter` example demonstrating `ctx.store` usage
+
+## [0.1.1] - 2026-03-28
+
+### Added
+
+- Probability distributions module: `uniform`, `gaussian`, `exponential`, `poisson`, `bernoulli`, `zipf`
+- All distributions are composable factories: `(rng: () => number, ...params) => () => number`
+- CI workflow via GitHub Actions
+- `network-packets` example demonstrating all six distributions in a realistic router simulation
+
+### Fixed
+
+- Repository URL format in `package.json`
+
 ## [0.1.0] - 2026-03-28
 
 ### Added

@@ -189,6 +189,44 @@ For long simulations that shouldn't block the Node.js event loop:
 const result = await sim.runAsync();
 ```
 
+## Resource
+
+`Resource` implements the seize/delay/release pattern for capacity-constrained shared resources — the building block of M/M/c queueing models (servers, machines, staff, connections).
+
+```typescript
+import { SimulationEngine, Resource, exponential } from 'simloop';
+
+type Events = {
+  'job:arrive': { jobId: number };
+  'job:done':   Record<string, never>;
+};
+
+const sim = new SimulationEngine<Events>({ seed: 42 });
+const server = new Resource<Events>('server'); // capacity defaults to 1
+
+sim.on('job:arrive', (event, ctx) => {
+  const arrivalTime = ctx.clock;
+
+  // SEIZE — callback fires when a slot is free (immediately or after queuing)
+  server.request(ctx, (ctx) => {
+    ctx.stats.record('waitTime', ctx.clock - arrivalTime);
+    ctx.schedule('job:done', ctx.clock + exponential(() => ctx.random(), 1)(), {});
+  });
+
+  ctx.schedule('job:arrive', ctx.clock + exponential(() => ctx.random(), 0.8)(), {
+    jobId: event.payload.jobId + 1,
+  });
+});
+
+sim.on('job:done', (_e, ctx) => {
+  server.release(ctx); // RELEASE — automatically grants next queued request
+});
+```
+
+Auto-collected statistics: `resource.{name}.waitTime`, `queueLength`, `utilization`, `requests`, `grants`.
+
+For the full API — priority queuing, cancellation, edge cases, and M/M/c examples — see [docs/resource-spec.md](docs/resource-spec.md).
+
 ## Examples
 
 See the [examples/](examples/) directory:
@@ -234,6 +272,7 @@ sim.on('customer:arrive', (event, ctx) => {
 ### Exported Classes
 
 - `SimulationEngine<TEventMap, TStore>` — main simulation engine
+- `Resource<TEventMap, TStore>` — seize/delay/release primitive for shared resources
 - `SimulationError` — error thrown for invalid operations
 - `ConsoleLogger` — default logger implementation
 - `DefaultStatsCollector` — default statistics collector
@@ -256,6 +295,7 @@ sim.on('customer:arrive', (event, ctx) => {
 - `EventHandler<TEventMap, TType, TStore>` — handler function signature
 - `SimulationResult<TStore>` — run result
 - `SimulationEngineOptions<TStore>` — engine configuration
+- `ResourceOptions` / `RequestOptions` / `RequestHandle` / `ResourceSnapshot` — Resource types
 - `StatsCollector` / `StatsSummary` — statistics interfaces
 - `SimLogger` / `LogLevel` — logging interfaces
 - `SimulationStatus` / `SimulationEndStatus` — lifecycle types

@@ -19,3 +19,7 @@ export type {
   SimLogger,
   LogLevel,
 } from './types.js';
+
+export { Resource } from './resource.js';
+
+export type { ResourceOptions, RequestOptions, RequestHandle, ResourceSnapshot } from './resource.js';
