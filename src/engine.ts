@@ -13,6 +13,7 @@ import { PriorityQueue } from './priority-queue.js';
 import { SeededRandom } from './prng.js';
 import { DefaultStatsCollector } from './stats.js';
 import { ConsoleLogger } from './logger.js';
+import { createDistHelper } from './distributions/dist-helper.js';
 
 /** Error thrown for invalid simulation operations */
 export class SimulationError extends Error {
@@ -60,6 +61,8 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
   private readonly maxTime: number;
   private readonly maxEvents: number;
   private readonly realTimeDelay: number;
+  private readonly warmUpTime: number | undefined;
+  private _warmUpCompleted = false;
 
   private _store: TStore;
   private readonly _initialStore: TStore;
@@ -72,6 +75,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
     this.maxTime = options.maxTime ?? Infinity;
     this.maxEvents = options.maxEvents ?? Infinity;
     this.realTimeDelay = options.realTimeDelay ?? 0;
+    this.warmUpTime = options.warmUpTime;
 
     this.rng = new SeededRandom(this.seed);
     this._stats = new DefaultStatsCollector();
@@ -205,6 +209,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
     this._stats.reset();
     this.rng.reset(this.seed);
     this._store = structuredClone(this._initialStore);
+    this._warmUpCompleted = false;
     this._status = 'idle';
     this.buildContext();
     this.logInternal('debug', 'Simulation reset');
@@ -223,6 +228,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
       }
 
       this._clock = event.time;
+      this.checkWarmUp();
       this.buildContext(); // refresh context with new clock
 
       for (const hook of this.beforeEachHooks) {
@@ -260,6 +266,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
       }
 
       this._clock = event.time;
+      this.checkWarmUp();
       this.buildContext();
 
       for (const hook of this.beforeEachHooks) {
@@ -414,6 +421,12 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
       random(): number {
         return engine.rng.next();
       },
+
+      dist: createDistHelper(() => engine.rng.next()),
+
+      get warmUpCompleted() {
+        return engine._warmUpCompleted;
+      },
     };
   }
 
@@ -434,6 +447,19 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
   private logInternal(level: LogLevel, message: string): void {
     const loggerImpl = this.options.logger ?? this.logger;
     loggerImpl.log(level, this._clock, message);
+  }
+
+  private checkWarmUp(): void {
+    if (this._warmUpCompleted) return;
+    if (this.warmUpTime === undefined) {
+      this._warmUpCompleted = true;
+      return;
+    }
+    if (this._clock >= this.warmUpTime) {
+      this._stats.reset();
+      this._warmUpCompleted = true;
+      this.logInternal('info', `Warm-up period ended at t=${this._clock}. Statistics reset.`);
+    }
   }
 
   private delay(ms: number): Promise<void> {

@@ -348,4 +348,117 @@ describe('SimulationEngine', () => {
       expect(asyncResult.finalClock).toBe(syncResult.finalClock);
     });
   });
+
+  describe('ctx.dist', () => {
+    it('should expose dist on the context with all distribution methods', () => {
+      const sim = new SimulationEngine<TestEvents>({ seed: 42 });
+      let hasDist = false;
+
+      sim.on('ping', (_event, ctx) => {
+        hasDist = ctx.dist !== undefined
+          && typeof ctx.dist.exponential === 'function'
+          && typeof ctx.dist.gaussian === 'function'
+          && typeof ctx.dist.uniform === 'function';
+      });
+
+      sim.init((ctx) => ctx.schedule('ping', 0, { message: 'test' }));
+      sim.run();
+
+      expect(hasDist).toBe(true);
+    });
+
+    it('should produce deterministic samples with seeded engine', () => {
+      const values: number[] = [];
+
+      for (let run = 0; run < 2; run++) {
+        const sim = new SimulationEngine<TestEvents>({ seed: 123 });
+        sim.on('ping', (_event, ctx) => {
+          values.push(ctx.dist.exponential(2)());
+        });
+        sim.init((ctx) => ctx.schedule('ping', 0, { message: 'test' }));
+        sim.run();
+      }
+
+      expect(values[0]).toBe(values[1]);
+    });
+  });
+
+  describe('warm-up period', () => {
+    it('should reset stats when clock crosses warmUpTime', () => {
+      const sim = new SimulationEngine<TestEvents>({ seed: 42, warmUpTime: 5 });
+
+      sim.on('ping', (_event, ctx) => {
+        ctx.stats.increment('count');
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('ping', 1, { message: 'during warm-up' });
+        ctx.schedule('ping', 3, { message: 'during warm-up' });
+        ctx.schedule('ping', 7, { message: 'after warm-up' });
+        ctx.schedule('ping', 10, { message: 'after warm-up' });
+      });
+
+      const result = sim.run();
+
+      // Only the 2 events after warmUpTime=5 should be counted
+      expect(result.stats['count'].count).toBe(2);
+    });
+
+    it('should set warmUpCompleted to false during warm-up and true after', () => {
+      const flags: boolean[] = [];
+      const sim = new SimulationEngine<TestEvents>({ seed: 42, warmUpTime: 5 });
+
+      sim.on('ping', (_event, ctx) => {
+        flags.push(ctx.warmUpCompleted);
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('ping', 2, { message: 'during' });
+        ctx.schedule('ping', 8, { message: 'after' });
+      });
+
+      sim.run();
+
+      expect(flags).toEqual([false, true]);
+    });
+
+    it('should have warmUpCompleted = true when no warmUpTime is set', () => {
+      let flag = false;
+      const sim = new SimulationEngine<TestEvents>({ seed: 42 });
+
+      sim.on('ping', (_event, ctx) => {
+        flag = ctx.warmUpCompleted;
+      });
+
+      sim.init((ctx) => ctx.schedule('ping', 1, { message: 'test' }));
+      sim.run();
+
+      expect(flag).toBe(true);
+    });
+
+    it('should reset warmUpCompleted on engine reset', () => {
+      const flags: boolean[] = [];
+      const sim = new SimulationEngine<TestEvents>({ seed: 42, warmUpTime: 5 });
+
+      sim.on('ping', (_event, ctx) => {
+        flags.push(ctx.warmUpCompleted);
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('ping', 2, { message: 'during' });
+        ctx.schedule('ping', 8, { message: 'after' });
+      });
+      sim.run();
+
+      // Reset and re-run — warm-up should trigger again
+      sim.reset();
+      sim.init((ctx) => {
+        ctx.schedule('ping', 3, { message: 'during again' });
+        ctx.schedule('ping', 9, { message: 'after again' });
+      });
+      sim.run();
+
+      expect(flags).toEqual([false, true, false, true]);
+    });
+  });
 });

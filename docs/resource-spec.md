@@ -44,7 +44,7 @@ This maps directly to M/M/c and related models (Kendall notation: A/S/c/K/N/D).
 ### M/M/1 single-server queue
 
 ```ts
-import { SimulationEngine, Resource, exponential } from 'simloop';
+import { SimulationEngine, Resource } from 'simloop';
 
 type Events = {
   'job:arrive': { jobId: number };
@@ -58,14 +58,14 @@ let jobCounter = 0;
 
 sim.on('job:arrive', (event, ctx) => {
   const arrivalTime = ctx.clock;
-  const interArrival = exponential(() => ctx.random(), 0.8)();
+  const interArrival = ctx.dist.exponential(0.8)();
   ctx.schedule('job:arrive', ctx.clock + interArrival, { jobId: ++jobCounter });
 
   server.request(ctx, (ctx) => {
     const waitTime = ctx.clock - arrivalTime;
     ctx.stats.record('waitTime', waitTime);
 
-    const serviceTime = exponential(() => ctx.random(), 1.0)();
+    const serviceTime = ctx.dist.exponential(1.0)();
     ctx.schedule('job:done', ctx.clock + serviceTime, {});
   });
 });

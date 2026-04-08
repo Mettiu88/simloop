@@ -17,6 +17,8 @@ Simloop provides a minimal, type-safe API for building simulations of real-world
 - **Deterministic** — seeded PRNG ensures reproducible results
 - **Simple API** — define handlers with `sim.on()`, schedule events with `ctx.schedule()`
 - **Probability distributions** — uniform, gaussian, exponential, poisson, bernoulli, zipf, triangular, weibull, lognormal, erlang, geometric
+- **Context-bound distributions** — `ctx.dist.exponential(rate)()` eliminates repetitive RNG wiring
+- **Warm-up period** — `warmUpTime` option auto-resets statistics after transient phase for steady-state analysis
 - **Lifecycle management** — run, pause, resume, stop, reset
 - **Built-in statistics** — online mean, variance, min, max, count
 - **Pluggable logging** — bring your own logger or use the default console logger
@@ -31,7 +33,7 @@ npm install simloop
 ## Quick Start
 
 ```typescript
-import { SimulationEngine, exponential } from 'simloop';
+import { SimulationEngine } from 'simloop';
 
 // 1. Define your event types
 type Events = {
@@ -52,8 +54,8 @@ sim.on('customer:arrive', (event, ctx) => {
   });
 
   // schedule next arrival (exponential inter-arrival, mean = 5)
-  const nextArrival = exponential(() => ctx.random(), 0.2);
-  ctx.schedule('customer:arrive', ctx.clock + nextArrival(), {
+  const nextArrival = ctx.dist.exponential(0.2)();
+  ctx.schedule('customer:arrive', ctx.clock + nextArrival, {
     customerId: `C${ctx.stats.get('arrivals').count + 1}`,
   });
 });
@@ -110,6 +112,8 @@ Every handler receives a `SimContext` with:
 | `ctx.store` | Global simulation store (typed as `TStore`) |
 | `ctx.stats` | Statistics collector (numeric metrics) |
 | `ctx.random()` | Seeded random number (0-1) |
+| `ctx.dist` | Context-bound distribution helper (see below) |
+| `ctx.warmUpCompleted` | Whether the warm-up period has ended |
 | `ctx.log(level, message)` | Log a message |
 
 ### Global Store
@@ -161,6 +165,7 @@ const sim = new SimulationEngine<Events, Store>({
   logLevel: 'info',    // 'debug' | 'info' | 'warn' | 'error' | 'silent'
   name: 'MySim',       // log prefix (default: 'Simulation')
   realTimeDelay: 100,  // ms delay between events in runAsync (default: 0)
+  warmUpTime: 500,     // reset stats after this sim-time (default: undefined)
   store: { ... },      // initial global store value (default: {})
 });
 ```
@@ -194,7 +199,7 @@ const result = await sim.runAsync();
 `Resource` implements the seize/delay/release pattern for capacity-constrained shared resources — the building block of M/M/c queueing models (servers, machines, staff, connections).
 
 ```typescript
-import { SimulationEngine, Resource, exponential } from 'simloop';
+import { SimulationEngine, Resource } from 'simloop';
 
 type Events = {
   'job:arrive': { jobId: number };
@@ -210,10 +215,10 @@ sim.on('job:arrive', (event, ctx) => {
   // SEIZE — callback fires when a slot is free (immediately or after queuing)
   server.request(ctx, (ctx) => {
     ctx.stats.record('waitTime', ctx.clock - arrivalTime);
-    ctx.schedule('job:done', ctx.clock + exponential(() => ctx.random(), 1)(), {});
+    ctx.schedule('job:done', ctx.clock + ctx.dist.exponential(1)(), {});
   });
 
-  ctx.schedule('job:arrive', ctx.clock + exponential(() => ctx.random(), 0.8)(), {
+  ctx.schedule('job:arrive', ctx.clock + ctx.dist.exponential(0.8)(), {
     jobId: event.payload.jobId + 1,
   });
 });
@@ -243,19 +248,25 @@ npm run example:network-packets
 
 ## Probability Distributions
 
-Simloop includes common probability distributions as composable factory functions. Each takes a `() => number` source (like `ctx.random`) and returns a sampler:
+Simloop includes common probability distributions. Inside handlers, use `ctx.dist` which pre-binds `ctx.random()` to all distribution factories:
 
 ```typescript
-import { SimulationEngine, exponential, gaussian, bernoulli } from 'simloop';
-
-const sim = new SimulationEngine<Events>({ seed: 42 });
-
 sim.on('customer:arrive', (event, ctx) => {
-  const nextArrival = exponential(() => ctx.random(), 0.5);
-  const serviceTime = gaussian(() => ctx.random(), 10, 2);
+  const nextArrival = ctx.dist.exponential(0.5)();
+  const serviceTime = ctx.dist.gaussian(10, 2)();
 
-  ctx.schedule('customer:arrive', ctx.clock + nextArrival(), { ... });
+  ctx.schedule('customer:arrive', ctx.clock + nextArrival, { ... });
 });
+```
+
+Standalone factory functions are also exported for use outside of handlers or with a custom RNG:
+
+```typescript
+import { exponential, SeededRandom } from 'simloop';
+
+const rng = new SeededRandom(42);
+const sampler = exponential(() => rng.next(), 0.5);
+console.log(sampler()); // sample from exponential
 ```
 
 | Distribution | Factory | Description |
@@ -285,6 +296,7 @@ sim.on('customer:arrive', (event, ctx) => {
 
 ### Exported Distribution Functions
 
+- `createDistHelper(rng)` — creates a `DistributionHelper` with a custom RNG (used internally by `ctx.dist`)
 - `uniform(rng, a, b)` — continuous uniform
 - `gaussian(rng, mean?, stddev?)` — normal (Box-Muller)
 - `exponential(rng, rate)` — exponential
@@ -307,6 +319,7 @@ sim.on('customer:arrive', (event, ctx) => {
 - `SimulationEngineOptions<TStore>` — engine configuration
 - `ResourceOptions` / `RequestOptions` / `RequestHandle` / `ResourceSnapshot` — Resource types
 - `StatsCollector` / `StatsSummary` — statistics interfaces
+- `DistributionHelper` — interface for the `ctx.dist` object
 - `SimLogger` / `LogLevel` — logging interfaces
 - `SimulationStatus` / `SimulationEndStatus` — lifecycle types
 

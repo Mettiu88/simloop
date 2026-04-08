@@ -70,14 +70,6 @@ interface CustomerState {
 // Utility functions
 // ---------------------------------------------------------------------------
 
-function exponentialRandom(u: number, rate: number): number {
-  return -Math.log(1 - u) / rate;
-}
-
-function uniformRandom(u: number, min: number, max: number): number {
-  return min + u * (max - min);
-}
-
 function pickDrink(u: number): DrinkSpec {
   const total = DRINKS.reduce((s, d) => s + d.popularity, 0);
   let t = u * total;
@@ -124,7 +116,7 @@ sim.on('customer:arrive', (event, ctx) => {
   });
 
   // Patience timeout — customer leaves if not served in time
-  const patience = uniformRandom(ctx.random(), CONFIG.maxQueuePatience * 0.5, CONFIG.maxQueuePatience);
+  const patience = ctx.dist.uniform(CONFIG.maxQueuePatience * 0.5, CONFIG.maxQueuePatience)();
   const patienceTimeout = ctx.schedule('customer:leave', ctx.clock + patience, { customerId });
   ctx.getEntity<CustomerState>(customerId)!.state.patienceTimeout = patienceTimeout;
 
@@ -150,7 +142,7 @@ sim.on('customer:arrive', (event, ctx) => {
     ctx.log('debug', `${customerId} starts service after ${waitTime.toFixed(1)}min wait`);
 
     const drinkSpec = DRINKS.find(d => d.name === customer.state.drink)!;
-    const prepTime = uniformRandom(ctx.random(), drinkSpec.prepTime.min, drinkSpec.prepTime.max);
+    const prepTime = ctx.dist.uniform(drinkSpec.prepTime.min, drinkSpec.prepTime.max)();
 
     ctx.schedule('order:complete', ctx.clock + prepTime, {
       customerId,
@@ -161,7 +153,7 @@ sim.on('customer:arrive', (event, ctx) => {
   ctx.getEntity<CustomerState>(customerId)!.state.baristaHandle = handle;
 
   // Schedule next customer arrival
-  const nextArrival = exponentialRandom(ctx.random(), 1 / CONFIG.avgArrivalInterval);
+  const nextArrival = ctx.dist.exponential(1 / CONFIG.avgArrivalInterval)();
   const nextId = `customer-${ctx.stats.get('totalArrivals').count + 1}`;
   ctx.schedule('customer:arrive', ctx.clock + nextArrival, { customerId: nextId });
 });

@@ -98,6 +98,12 @@ interface SimContext<TEventMap extends Record<string, unknown>, TStore = Record<
 
   /** Seeded pseudo-random number generator (0-1 range) */
   random(): number;
+
+  /** Context-bound distribution helper — pre-binds random() to all distribution factories */
+  dist: DistributionHelper;
+
+  /** Whether the warm-up period has completed (always true if no warmUpTime is set) */
+  readonly warmUpCompleted: boolean;
 }
 ```
 
@@ -244,6 +250,11 @@ interface SimulationEngineOptions<TStore = Record<string, unknown>> {
   /** Delay in ms between events in runAsync (for visualization/debugging). Default: 0 */
   realTimeDelay?: number;
 
+  /** Warm-up time: stats are automatically reset when the clock crosses this threshold.
+   *  Useful for discarding transient initial bias and collecting steady-state statistics.
+   *  Default: undefined (no warm-up). */
+  warmUpTime?: number;
+
   /** Initial value for the global simulation store. Deep-cloned on init and on reset(). Default: {} */
   store?: TStore;
 }
@@ -370,6 +381,11 @@ This design keeps distributions decoupled from the engine — they can be used s
 | **Poisson** | `poisson(rng, lambda)` | Poisson via Knuth's algorithm. Returns non-negative integers |
 | **Bernoulli** | `bernoulli(rng, p)` | Returns 1 with probability p, 0 otherwise |
 | **Zipf** | `zipf(rng, n, s)` | Zipf over ranks `[1, n]` with exponent s. Rank k has probability ∝ 1/k^s |
+| **Triangular** | `triangular(rng, min, mode, max)` | Triangular distribution; three-point estimate (PERT, expert estimates) |
+| **Weibull** | `weibull(rng, scale, shape)` | Weibull distribution; reliability and failure analysis |
+| **Lognormal** | `lognormal(rng, mu?, sigma?)` | Lognormal distribution; right-skewed service times, response times |
+| **Erlang** | `erlang(rng, k, rate)` | Erlang distribution; sum of k exponentials, k-stage sequential processes |
+| **Geometric** | `geometric(rng, p)` | Geometric distribution; number of trials until first success (minimum 1) |
 
 ### 9.2 Usage
 
@@ -387,16 +403,26 @@ console.log(interArrival()); // sample from exponential
 console.log(serviceTime());  // sample from gaussian
 ```
 
-Distributions can also be used inside event handlers via `ctx.random`:
+### 9.3 Context-bound distributions (`ctx.dist`)
+
+Inside event handlers, `ctx.dist` provides all distribution factories with `ctx.random()` pre-bound, eliminating the need to pass the RNG manually:
 
 ```typescript
 sim.on('customer:arrive', (event, ctx) => {
-  const nextArrival = exponential(() => ctx.random(), 0.5);
-  ctx.schedule('customer:arrive', ctx.clock + nextArrival(), { ... });
+  const nextArrival = ctx.dist.exponential(0.5)();
+  ctx.schedule('customer:arrive', ctx.clock + nextArrival, { ... });
+
+  // Or create a reusable sampler
+  const serviceTime = ctx.dist.gaussian(10, 2);
+  console.log(serviceTime()); // sample from gaussian
 });
 ```
 
-### 9.3 Validation
+Each method on `ctx.dist` mirrors its standalone counterpart (minus the `rng` parameter) and returns a `() => number` sampler.
+
+The standalone functions remain available for use outside of event handlers or with a custom RNG source.
+
+### 9.4 Validation
 
 All factories validate their parameters and throw `RangeError` for invalid inputs (e.g., negative rate, `p` outside `[0, 1]`).
 
@@ -439,7 +465,7 @@ sim.on('customer:arrive', (event, ctx) => {
 
   // Schedule next arrival (exponential inter-arrival time)
   const nextId = `C${ctx.stats.get('arrivals').count + 1}`;
-  ctx.schedule('customer:arrive', ctx.clock + expRandom(ctx.random(), 1.0), {
+  ctx.schedule('customer:arrive', ctx.clock + ctx.dist.exponential(1.0)(), {
     customerId: nextId,
   });
 
@@ -456,7 +482,7 @@ sim.on('customer:startService', (event, ctx) => {
   server.state.busy = true;
 
   // Schedule service completion (exponential service time)
-  ctx.schedule('customer:endService', ctx.clock + expRandom(ctx.random(), 1.5), {
+  ctx.schedule('customer:endService', ctx.clock + ctx.dist.exponential(1.5)(), {
     customerId: event.payload.customerId,
   });
 });
@@ -486,9 +512,4 @@ const result = sim.run();
 console.log(`Served: ${result.stats['served']?.count}`);
 console.log(`Avg wait: ${result.stats['waitTime']?.mean.toFixed(2)}`);
 console.log(`Sim time: ${result.finalClock.toFixed(2)}`);
-
-// Utility: exponential random variate
-function expRandom(u: number, rate: number): number {
-  return -Math.log(1 - u) / rate;
-}
 ```

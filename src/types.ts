@@ -41,6 +41,21 @@ export interface StatsCollector {
   reset(): void;
 }
 
+/** Distribution helper with pre-bound RNG. Each method returns a sampler () => number. */
+export interface DistributionHelper {
+  uniform(a: number, b: number): () => number;
+  gaussian(mean?: number, stddev?: number): () => number;
+  exponential(rate: number): () => number;
+  poisson(lambda: number): () => number;
+  bernoulli(p: number): () => number;
+  zipf(n: number, s: number): () => number;
+  triangular(min: number, mode: number, max: number): () => number;
+  weibull(scale: number, shape: number): () => number;
+  lognormal(mu?: number, sigma?: number): () => number;
+  erlang(k: number, rate: number): () => number;
+  geometric(p: number): () => number;
+}
+
 /** Simulation context passed to event handlers */
 export interface SimContext<TEventMap extends Record<string, unknown>, TStore = Record<string, unknown>> {
   readonly clock: number;
@@ -61,6 +76,10 @@ export interface SimContext<TEventMap extends Record<string, unknown>, TStore = 
   stats: StatsCollector;
   log(level: LogLevel, message: string, data?: unknown): void;
   random(): number;
+  dist: DistributionHelper;
+
+  /** Whether the warm-up period has completed (always true if no warmUpTime is set) */
+  readonly warmUpCompleted: boolean;
 
   store: TStore;
 }
@@ -98,5 +117,11 @@ export interface SimulationEngineOptions<TStore = Record<string, unknown>> {
   logger?: SimLogger;
   name?: string;
   realTimeDelay?: number;
+
+  /** Warm-up time: stats are automatically reset when the clock crosses this threshold.
+   *  Useful for discarding transient initial bias and collecting steady-state statistics.
+   *  Default: undefined (no warm-up). */
+  warmUpTime?: number;
+
   store?: TStore;
 }

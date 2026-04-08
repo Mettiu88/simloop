@@ -9,3 +9,4 @@ export { weibull } from './weibull.js';
 export { lognormal } from './lognormal.js';
 export { erlang } from './erlang.js';
 export { geometric } from './geometric.js';
+export { createDistHelper } from './dist-helper.js';

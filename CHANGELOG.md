@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-04-08
+
+### Added
+
+- `ctx.dist` — context-bound distribution helper; pre-binds `ctx.random()` to all 11 distribution
+  functions, eliminating the repetitive `distribution(() => ctx.random(), ...params)` pattern
+  - Methods: `uniform`, `gaussian`, `exponential`, `poisson`, `bernoulli`, `zipf`, `triangular`,
+    `weibull`, `lognormal`, `erlang`, `geometric`
+  - Each method returns a sampler `() => number`, e.g. `ctx.dist.exponential(2)()`
+- `DistributionHelper` — exported interface for the `ctx.dist` object
+- `createDistHelper(rng)` — factory function to create a `DistributionHelper` with a custom RNG
+  (useful outside of the simulation context)
+- `warmUpTime` option in `SimulationEngineOptions` — automatically resets statistics when the
+  simulation clock crosses the specified threshold, discarding transient initial bias for
+  steady-state analysis
+- `ctx.warmUpCompleted` — read-only flag indicating whether the warm-up period has ended
+  (always `true` if no `warmUpTime` is set)
+
+### Changed
+
+- `coffee-shop` example rewritten to use `ctx.dist` instead of inline utility functions
+
 ## [0.2.0] - 2026-03-31
 
 ### Added
