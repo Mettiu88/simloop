@@ -95,7 +95,7 @@ export type EventHandler<
 export type SimulationStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'finished';
 
 /** Result termination reason */
-export type SimulationEndStatus = 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached';
+export type SimulationEndStatus = 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached' | 'stopConditionMet';
 
 /** Result returned after a simulation run */
 export interface SimulationResult<TStore = Record<string, unknown>> {
@@ -109,7 +109,10 @@ export interface SimulationResult<TStore = Record<string, unknown>> {
 }
 
 /** Engine configuration options */
-export interface SimulationEngineOptions<TStore = Record<string, unknown>> {
+export interface SimulationEngineOptions<
+  TEventMap extends Record<string, unknown> = Record<string, unknown>,
+  TStore = Record<string, unknown>,
+> {
   seed?: number;
   maxTime?: number;
   maxEvents?: number;
@@ -122,6 +125,12 @@ export interface SimulationEngineOptions<TStore = Record<string, unknown>> {
    *  Useful for discarding transient initial bias and collecting steady-state statistics.
    *  Default: undefined (no warm-up). */
   warmUpTime?: number;
+
+  /** Custom stop condition evaluated after each event. When it returns `true` the
+   *  simulation ends with status `'stopConditionMet'`.
+   *  Useful for optimisation, steady-state detection, and Monte Carlo convergence.
+   *  Default: undefined (no custom stop condition). */
+  stopWhen?: (ctx: SimContext<TEventMap, TStore>) => boolean;
 
   store?: TStore;
 }

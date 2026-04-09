@@ -125,7 +125,7 @@ The main class that users instantiate and configure.
 
 ```typescript
 class SimulationEngine<TEventMap extends Record<string, unknown>, TStore = Record<string, unknown>> {
-  constructor(options?: SimulationEngineOptions<TStore>);
+  constructor(options?: SimulationEngineOptions<TEventMap, TStore>);
 
   /** Register a handler for an event type */
   on<K extends keyof TEventMap & string>(
@@ -220,7 +220,7 @@ interface SimulationResult<TStore = Record<string, unknown>> {
   readonly finalClock: number;
   readonly wallClockMs: number;
   readonly stats: Record<string, StatsSummary>;
-  readonly status: 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached';
+  readonly status: 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached' | 'stopConditionMet';
   readonly store: TStore;
 }
 ```
@@ -228,7 +228,10 @@ interface SimulationResult<TStore = Record<string, unknown>> {
 ### 3.9 Configuration
 
 ```typescript
-interface SimulationEngineOptions<TStore = Record<string, unknown>> {
+interface SimulationEngineOptions<
+  TEventMap extends Record<string, unknown> = Record<string, unknown>,
+  TStore = Record<string, unknown>,
+> {
   /** PRNG seed for reproducibility. Default: Date.now() */
   seed?: number;
 
@@ -254,6 +257,12 @@ interface SimulationEngineOptions<TStore = Record<string, unknown>> {
    *  Useful for discarding transient initial bias and collecting steady-state statistics.
    *  Default: undefined (no warm-up). */
   warmUpTime?: number;
+
+  /** Custom stop condition evaluated after each processed event. When it returns `true`
+   *  the simulation ends with status `'stopConditionMet'`.
+   *  Useful for optimisation, steady-state detection, and Monte Carlo convergence.
+   *  Default: undefined (no custom stop condition). */
+  stopWhen?: (ctx: SimContext<TEventMap, TStore>) => boolean;
 
   /** Initial value for the global simulation store. Deep-cloned on init and on reset(). Default: {} */
   store?: TStore;
@@ -295,6 +304,10 @@ while queue is not empty
 
     run all afterEach hooks
     increment processedCount
+
+    if stopWhen is defined AND stopWhen(context) is true:
+        mark stopConditionMet
+        break
 
 run all onEnd hooks
 return SimulationResult
