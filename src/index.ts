@@ -22,5 +22,7 @@ export type {
 } from './types.js';
 
 export { Resource } from './resource.js';
+export { Queue } from './queue.js';
 
 export type { ResourceOptions, RequestOptions, RequestHandle, ResourceSnapshot } from './resource.js';
+export type { QueueOptions, EnqueueOptions, QueueSnapshot } from './queue.js';

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-04-09
+
+### Added
+
+- `stopWhen` option in `SimulationEngineOptions` — custom stop condition evaluated after each
+  processed event; when it returns `true` the simulation ends with status `'stopConditionMet'`.
+  Useful for optimisation, steady-state detection, and Monte Carlo convergence.
+- `'stopConditionMet'` value added to `SimulationEndStatus`
+- `Queue<T>` — standalone FIFO/priority queue with bounded capacity, overflow policies
+  (drop/block), and auto-collected statistics (enqueued, dequeued, dropped, blocked,
+  blockTime, waitTime, queueLength, throughput)
+- `QueueOptions`, `EnqueueOptions`, `QueueSnapshot` — exported types
+- `docs/queue-spec.md` — full API specification with overflow policies, statistics reference,
+  and edge case documentation
+- `queue-buffer` example demonstrating bounded production line with drop-on-overflow
+
+### Changed
+
+- **Breaking**: `SimulationEngineOptions` now takes two generic parameters
+  `<TEventMap, TStore>` (previously only `<TStore>`). Bare usage and inline options are unaffected;
+  only explicit standalone typing needs updating.
+- `stop-condition` example demonstrating `stopWhen` with coefficient of variation convergence
+
 ## [0.3.0] - 2026-04-08
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "simloop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A general-purpose discrete event simulation framework for Node.js",
   "type": "module",
   "sideEffects": false,
@@ -30,7 +30,9 @@
     "prepublishOnly": "npm run typecheck && npm run test && npm run build",
     "example:store-counter": "tsx examples/store-counter/main.ts",
     "example:coffee-shop": "tsx examples/coffee-shop/main.ts",
-    "example:network-packets": "tsx examples/network-packets/main.ts"
+    "example:network-packets": "tsx examples/network-packets/main.ts",
+    "example:stop-condition": "tsx examples/stop-condition/main.ts",
+    "example:queue-buffer": "tsx examples/queue-buffer/main.ts"
   },
   "keywords": [
     "simulation",

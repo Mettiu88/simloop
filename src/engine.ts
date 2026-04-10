@@ -62,6 +62,8 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
   private readonly maxEvents: number;
   private readonly realTimeDelay: number;
   private readonly warmUpTime: number | undefined;
+  private readonly stopWhen?: (ctx: SimContext<TEventMap, TStore>) => boolean;
+  private _stopConditionMet = false;
   private _warmUpCompleted = false;
 
   private _store: TStore;
@@ -70,12 +72,13 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
   private eventIdCounter = 0;
   private context!: SimContext<TEventMap, TStore>;
 
-  constructor(private readonly options: SimulationEngineOptions<TStore> = {}) {
+  constructor(private readonly options: SimulationEngineOptions<TEventMap, TStore> = {}) {
     this.seed = options.seed ?? Date.now();
     this.maxTime = options.maxTime ?? Infinity;
     this.maxEvents = options.maxEvents ?? Infinity;
     this.realTimeDelay = options.realTimeDelay ?? 0;
     this.warmUpTime = options.warmUpTime;
+    this.stopWhen = options.stopWhen;
 
     this.rng = new SeededRandom(this.seed);
     this._stats = new DefaultStatsCollector();
@@ -210,6 +213,7 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
     this.rng.reset(this.seed);
     this._store = structuredClone(this._initialStore);
     this._warmUpCompleted = false;
+    this._stopConditionMet = false;
     this._status = 'idle';
     this.buildContext();
     this.logInternal('debug', 'Simulation reset');
@@ -247,6 +251,11 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
       }
 
       this._eventsProcessed++;
+
+      if (this.stopWhen && this.stopWhen(this.context)) {
+        this._stopConditionMet = true;
+        break;
+      }
     }
 
     this.finalize();
@@ -285,6 +294,12 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
       }
 
       this._eventsProcessed++;
+
+      if (this.stopWhen && this.stopWhen(this.context)) {
+        this._stopConditionMet = true;
+        break;
+      }
+
       batchCount++;
 
       // Yield to the Node.js event loop periodically
@@ -338,6 +353,8 @@ export class SimulationEngine<TEventMap extends Record<string, unknown>, TStore 
       endStatus = 'maxEventsReached';
     } else if (this._clock >= this.maxTime) {
       endStatus = 'maxTimeReached';
+    } else if (this._stopConditionMet) {
+      endStatus = 'stopConditionMet';
     } else {
       endStatus = 'finished';
     }

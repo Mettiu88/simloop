@@ -461,4 +461,154 @@ describe('SimulationEngine', () => {
       expect(flags).toEqual([false, true, false, true]);
     });
   });
+
+  describe('custom stop conditions (stopWhen)', () => {
+    it('should stop when stopWhen returns true', () => {
+      const sim = new SimulationEngine<TestEvents>({
+        stopWhen: (ctx) => ctx.stats.get('count').sum >= 3,
+      });
+
+      sim.on('tick', (_e, ctx) => {
+        ctx.stats.record('count', 1);
+        ctx.schedule('tick', ctx.clock + 1, {});
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('tick', 0, {});
+      });
+
+      const result = sim.run();
+      expect(result.status).toBe('stopConditionMet');
+      expect(result.totalEventsProcessed).toBe(3);
+    });
+
+    it('should provide updated context to stopWhen', () => {
+      const clocks: number[] = [];
+
+      const sim = new SimulationEngine<TestEvents, { total: number }>({
+        store: { total: 0 },
+        stopWhen: (ctx) => {
+          clocks.push(ctx.clock);
+          return ctx.store.total >= 30;
+        },
+      });
+
+      sim.on('tick', (_e, ctx) => {
+        ctx.store.total += 10;
+        ctx.schedule('tick', ctx.clock + 5, {});
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('tick', 0, {});
+      });
+
+      const result = sim.run();
+      expect(result.status).toBe('stopConditionMet');
+      expect(clocks).toEqual([0, 5, 10]);
+      expect(result.store.total).toBe(30);
+    });
+
+    it('should return maxTimeReached when maxTime triggers before stopWhen', () => {
+      const sim = new SimulationEngine<TestEvents>({
+        maxTime: 20,
+        stopWhen: () => false, // never triggers
+      });
+
+      sim.on('tick', (_e, ctx) => {
+        ctx.schedule('tick', ctx.clock + 10, {});
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('tick', 0, {});
+      });
+
+      const result = sim.run();
+      expect(result.status).toBe('maxTimeReached');
+    });
+
+    it('should return maxEventsReached when maxEvents triggers before stopWhen', () => {
+      const sim = new SimulationEngine<TestEvents>({
+        maxEvents: 2,
+        stopWhen: () => false,
+      });
+
+      sim.on('tick', (_e, ctx) => {
+        ctx.schedule('tick', ctx.clock + 1, {});
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('tick', 0, {});
+      });
+
+      const result = sim.run();
+      expect(result.status).toBe('maxEventsReached');
+    });
+
+    it('should process the event that triggers the stop condition', () => {
+      let processed = 0;
+
+      const sim = new SimulationEngine<TestEvents>({
+        stopWhen: (ctx) => ctx.clock >= 10,
+      });
+
+      sim.on('tick', (_e, ctx) => {
+        processed++;
+        ctx.schedule('tick', ctx.clock + 5, {});
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('tick', 0, {});
+      });
+
+      const result = sim.run();
+      expect(result.status).toBe('stopConditionMet');
+      // Events at t=0,5,10 — the event at t=10 IS processed
+      expect(processed).toBe(3);
+      expect(result.finalClock).toBe(10);
+    });
+
+    it('should work with runAsync', async () => {
+      const sim = new SimulationEngine<TestEvents>({
+        stopWhen: (ctx) => ctx.stats.get('count').sum >= 3,
+      });
+
+      sim.on('tick', (_e, ctx) => {
+        ctx.stats.record('count', 1);
+        ctx.schedule('tick', ctx.clock + 1, {});
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('tick', 0, {});
+      });
+
+      const result = await sim.runAsync();
+      expect(result.status).toBe('stopConditionMet');
+      expect(result.totalEventsProcessed).toBe(3);
+    });
+
+    it('should reset stopConditionMet flag on reset', () => {
+      const sim = new SimulationEngine<TestEvents>({
+        stopWhen: (ctx) => ctx.clock >= 5,
+      });
+
+      sim.on('tick', (_e, ctx) => {
+        ctx.schedule('tick', ctx.clock + 5, {});
+      });
+
+      sim.init((ctx) => {
+        ctx.schedule('tick', 0, {});
+      });
+
+      const result1 = sim.run();
+      expect(result1.status).toBe('stopConditionMet');
+
+      sim.reset();
+      sim.init((ctx) => {
+        ctx.schedule('tick', 0, {});
+      });
+
+      const result2 = sim.run();
+      expect(result2.status).toBe('stopConditionMet');
+    });
+  });
 });

@@ -17,7 +17,8 @@ Simloop provides a minimal, type-safe API for building simulations of real-world
 - **Deterministic** — seeded PRNG ensures reproducible results
 - **Simple API** — define handlers with `sim.on()`, schedule events with `ctx.schedule()`
 - **Probability distributions** — uniform, gaussian, exponential, poisson, bernoulli, zipf, triangular, weibull, lognormal, erlang, geometric
-- **Context-bound distributions** — `ctx.dist.exponential(rate)()` eliminates repetitive RNG wiring
+- **Queue primitive** — standalone FIFO/priority queue with bounded capacity, overflow policies (drop/block), and auto-collected stats
+- **Custom stop conditions** — `stopWhen` callback to halt the simulation when an arbitrary condition is met
 - **Warm-up period** — `warmUpTime` option auto-resets statistics after transient phase for steady-state analysis
 - **Lifecycle management** — run, pause, resume, stop, reset
 - **Built-in statistics** — online mean, variance, min, max, count
@@ -166,6 +167,8 @@ const sim = new SimulationEngine<Events, Store>({
   name: 'MySim',       // log prefix (default: 'Simulation')
   realTimeDelay: 100,  // ms delay between events in runAsync (default: 0)
   warmUpTime: 500,     // reset stats after this sim-time (default: undefined)
+  stopWhen: (ctx) =>   // custom stop condition (default: undefined)
+    ctx.stats.get('queue').mean > threshold,
   store: { ... },      // initial global store value (default: {})
 });
 ```
@@ -182,7 +185,7 @@ result.totalEventsCancelled  // number of cancelled events skipped
 result.finalClock            // final simulation time
 result.wallClockMs           // real-world execution time in ms
 result.stats                 // Record<string, StatsSummary>
-result.status                // 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached'
+result.status                // 'finished' | 'stopped' | 'maxTimeReached' | 'maxEventsReached' | 'stopConditionMet'
 result.store                 // TStore — final state of the global store
 ```
 
@@ -232,6 +235,39 @@ Auto-collected statistics: `resource.{name}.waitTime`, `queueLength`, `utilizati
 
 For the full API — priority queuing, cancellation, edge cases, and M/M/c examples — see [docs/resource-spec.md](docs/resource-spec.md).
 
+## Queue
+
+`Queue<T>` is a standalone FIFO/priority queue for modeling buffers, pipelines, conveyor belts, and WIP limits. Supports bounded capacity with overflow policies (drop or block).
+
+```typescript
+import { SimulationEngine, Queue } from 'simloop';
+
+type Events = {
+  'item:produce': { itemId: number };
+  'item:consume': Record<string, never>;
+};
+
+const sim = new SimulationEngine<Events>({ seed: 42 });
+const buffer = new Queue<number>('buffer', { maxCapacity: 5 });
+
+sim.on('item:produce', (event, ctx) => {
+  buffer.enqueue(ctx, event.payload.itemId);
+  ctx.schedule('item:produce', ctx.clock + ctx.dist.exponential(1)(), {
+    itemId: event.payload.itemId + 1,
+  });
+});
+
+sim.on('item:consume', (_e, ctx) => {
+  const item = buffer.dequeue(ctx);
+  if (item !== undefined) ctx.stats.increment('consumed');
+  ctx.schedule('item:consume', ctx.clock + ctx.dist.exponential(0.8)(), {});
+});
+```
+
+Auto-collected statistics: `queue.{name}.enqueued`, `dequeued`, `dropped`, `blocked`, `blockTime`, `waitTime`, `queueLength`, `throughput`.
+
+For the full API — overflow policies, priority queuing, blocking, and edge cases — see [docs/queue-spec.md](docs/queue-spec.md).
+
 ## Examples
 
 See the [examples/](examples/) directory:
@@ -239,11 +275,15 @@ See the [examples/](examples/) directory:
 - **[store-counter](examples/store-counter/)** — minimal example showing `ctx.store` usage
 - **[coffee-shop](examples/coffee-shop/)** — multi-barista coffee shop with customer patience, drink types, and queue management
 - **[network-packets](examples/network-packets/)** — network router simulation using all six probability distributions
+- **[stop-condition](examples/stop-condition/)** — Monte Carlo convergence using `stopWhen` to halt when the coefficient of variation is low enough
+- **[queue-buffer](examples/queue-buffer/)** — bounded production line with drop-on-overflow buffer
 
 ```bash
 npm run example:store-counter
 npm run example:coffee-shop
 npm run example:network-packets
+npm run example:stop-condition
+npm run example:queue-buffer
 ```
 
 ## Probability Distributions
@@ -289,6 +329,7 @@ console.log(sampler()); // sample from exponential
 
 - `SimulationEngine<TEventMap, TStore>` — main simulation engine
 - `Resource<TEventMap, TStore>` — seize/delay/release primitive for shared resources
+- `Queue<T>` — standalone FIFO/priority queue with bounded capacity and overflow policies
 - `SimulationError` — error thrown for invalid operations
 - `ConsoleLogger` — default logger implementation
 - `DefaultStatsCollector` — default statistics collector
@@ -316,8 +357,9 @@ console.log(sampler()); // sample from exponential
 - `SimContext<TEventMap, TStore>` — handler context
 - `EventHandler<TEventMap, TType, TStore>` — handler function signature
 - `SimulationResult<TStore>` — run result
-- `SimulationEngineOptions<TStore>` — engine configuration
+- `SimulationEngineOptions<TEventMap, TStore>` — engine configuration
 - `ResourceOptions` / `RequestOptions` / `RequestHandle` / `ResourceSnapshot` — Resource types
+- `QueueOptions` / `EnqueueOptions` / `QueueSnapshot` — Queue types
 - `StatsCollector` / `StatsSummary` — statistics interfaces
 - `DistributionHelper` — interface for the `ctx.dist` object
 - `SimLogger` / `LogLevel` — logging interfaces
