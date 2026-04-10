@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   processed event; when it returns `true` the simulation ends with status `'stopConditionMet'`.
   Useful for optimisation, steady-state detection, and Monte Carlo convergence.
 - `'stopConditionMet'` value added to `SimulationEndStatus`
+- `Queue<T>` — standalone FIFO/priority queue with bounded capacity, overflow policies
+  (drop/block), and auto-collected statistics (enqueued, dequeued, dropped, blocked,
+  blockTime, waitTime, queueLength, throughput)
+- `QueueOptions`, `EnqueueOptions`, `QueueSnapshot` — exported types
+- `docs/queue-spec.md` — full API specification with overflow policies, statistics reference,
+  and edge case documentation
+- `queue-buffer` example demonstrating bounded production line with drop-on-overflow
 
 ### Changed
 

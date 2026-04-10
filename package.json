@@ -31,7 +31,8 @@
     "example:store-counter": "tsx examples/store-counter/main.ts",
     "example:coffee-shop": "tsx examples/coffee-shop/main.ts",
     "example:network-packets": "tsx examples/network-packets/main.ts",
-    "example:stop-condition": "tsx examples/stop-condition/main.ts"
+    "example:stop-condition": "tsx examples/stop-condition/main.ts",
+    "example:queue-buffer": "tsx examples/queue-buffer/main.ts"
   },
   "keywords": [
     "simulation",
