@@ -1,6 +1,6 @@
 {
   "name": "simloop",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A general-purpose discrete event simulation framework for Node.js",
   "type": "module",
   "sideEffects": false,
@@ -47,7 +47,7 @@
     "type": "git",
     "url": "git+https://github.com/Mettiu88/simloop.git"
   },
-  "homepage": "https://github.com/Mettiu88/simloop#readme",
+  "homepage": "https://simloop.vercel.app",
   "bugs": {
     "url": "https://github.com/Mettiu88/simloop/issues"
   },
